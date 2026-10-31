@@ -1,0 +1,6 @@
+{
+  "name": "usage-band",
+  "version": "0.2.0",
+  "description": "A right-aligned band above the prompt showing context fill and rate-limit windows",
+  "types": "./types/index.d.ts"
+}
