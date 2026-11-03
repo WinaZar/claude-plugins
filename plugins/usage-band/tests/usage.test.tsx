@@ -1,17 +1,4 @@
-import { expect, test } from 'claude-code/testing'
-
-const BAND = {
-  plugin: 'usage-band',
-  component: 'AbovePrompt',
-  props: {
-    hasSurvey: false,
-    isWorking: false,
-    maxRows: 6,
-    bodyColumns: 120,
-    scroll: { offset: 0, bodyRows: 5 },
-    view: {},
-  },
-} as const
+import { expect, mock, test } from 'claude-code/testing'
 
 const FIRST = {
   startedAt: 0,
@@ -20,20 +7,20 @@ const FIRST = {
   cost: { usd: 0 },
 }
 
-test('the band follows each measurement, without cost', async ($, on) => {
+test('the line under the prompt follows each measurement and counts down', async ($, on) => {
+  const clock = mock.clock(on, { now: Date.parse('2098-12-30T12:00:00Z') })
+  const lines: (string | undefined)[] = []
   on('session.usage', () => ({ value: FIRST }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('session.measure', (_, e) => ({ changed: e.changed }))
-  on('clock.now', () => ({ value: Date.parse('2098-12-30T12:00:00Z') }))
-  on('clock.every', () => ({ value: undefined }))
+  on('ui.status', (_, e) => {
+    lines.push(e.text)
+
+    return { value: undefined }
+  })
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-
-  for (const surface of ['terminal', 'desktop'] as const) {
-    const ui = await $.ui.mount({ ...BAND, surface })
-    expect((await ui.find({ type: 'Text', text: /Context/ }))?.text).toBe('Context: no reading yet')
-    await ui.unmount()
-  }
+  expect(lines).toEqual([undefined])
 
   await $.session.measure({
     context: { tokens: 84_000, window: 200_000, percent: 42 },
@@ -44,37 +31,30 @@ test('the band follows each measurement, without cost', async ($, on) => {
     cost: { usd: 1.234 },
     changed: ['context', 'rateLimits', 'cost'],
   })
+  expect(lines.at(-1)).toBe('5h 64% (2h 14m) · week 18% (1d 12h) · ctx 42% 84k/200k')
 
-  for (const surface of ['terminal', 'desktop'] as const) {
-    const ui = await $.ui.mount({ ...BAND, surface })
-    expect((await ui.find({ type: 'Text', text: /^█/ }))?.text).toBe('███░░░░░')
-    expect((await ui.find({ type: 'Text', text: /200k/ }))?.text).toBe('84k/200k')
-    expect((await ui.find({ type: 'Text', text: /5-hour/ }))?.text).toBe('5-hour')
-    expect((await ui.find({ type: 'Text', text: /63/ }))?.text).toBe('63.5%')
-    expect((await ui.find({ type: 'Text', text: /resets 2h/ }))?.text).toBe('resets 2h 14m')
-    expect((await ui.find({ type: 'Text', text: /resets 1d/ }))?.text).toBe('resets 1d 12h')
-    expect(await ui.find({ type: 'Text', text: /\$/ })).toBeUndefined()
-    await ui.unmount()
-  }
+  await clock.advance(60_000)
+  expect(lines.at(-1)).toBe('5h 64% (2h 13m) · week 18% (1d 11h) · ctx 42% 84k/200k')
 })
 
-test('the band yields to a survey', async ($, on) => {
+test('a million-token window reads 1M, and a window with no reset time has no countdown', async ($, on) => {
+  mock.clock(on, { now: 0 })
+  const lines: (string | undefined)[] = []
   on('session.usage', () => ({ value: FIRST }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('clock.every', () => ({ value: undefined }))
-  on('ui.render', ($, e) => {
-    const { Text } = $.ui.resolve(e)
+  on('session.measure', (_, e) => ({ changed: e.changed }))
+  on('ui.status', (_, e) => {
+    lines.push(e.text)
 
-    return <Text>survey</Text>
+    return { value: undefined }
   })
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({
-    ...BAND,
-    props: { ...BAND.props, hasSurvey: true },
-    surface: 'terminal',
+  await $.session.measure({
+    context: { tokens: 66_000, window: 1_000_000, percent: 7 },
+    rateLimits: [{ kind: 'five_hour', percentUsed: 18 }],
+    cost: { usd: 0 },
+    changed: ['context', 'rateLimits'],
   })
-
-  expect((await ui.find({ type: 'Text' }))?.text).toBe('survey')
-  await ui.unmount()
+  expect(lines.at(-1)).toBe('5h 18% · ctx 7% 66k/1M')
 })

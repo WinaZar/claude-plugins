@@ -5,7 +5,7 @@
     {
       "name": "usage-band",
       "source": "./plugins/usage-band",
-      "description": "A right-aligned band above the prompt showing context fill and rate-limit windows"
+      "description": "One line under the prompt showing rate-limit windows and context fill"
     }
   ]
 }
