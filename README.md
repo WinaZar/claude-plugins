@@ -6,7 +6,7 @@ My plugins for [Claude Code](https://claude.com/claude-code), published as one m
 
 | Plugin | What it does |
 | --- | --- |
-| [usage-band](plugins/usage-band) | A right-aligned band above the prompt: how full the context window is, and the 5-hour and weekly rate-limit windows with the time until each resets. Bars turn yellow past 50% and red past 80%. |
+| [usage-band](plugins/usage-band) | One line under the prompt: the 5-hour and weekly rate-limit windows with the time until each resets, and how full the context window is, e.g. `5h 18% (4h 11m) · week 6% (5d 20h) · ctx 7% 66k/1M`. |
 
 ## Install
 
