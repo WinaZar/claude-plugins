@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, SessionUsage } from 'claude-code'
+import type { Register, SessionUsage } from 'claude-code'
 
 import type { Usage } from '../types'
 
@@ -54,26 +54,30 @@ function line(u: Usage, now: number): string | undefined {
   return parts.length > 0 ? parts.join(' · ') : undefined
 }
 
-async function show($: EngineInterface): Promise<void> {
-  const u = await read($, usage)
-  $.ui.status(u ? line(u, await $.clock.now()) : undefined)
-}
-
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const now = await $.session.usage()
     await update($, usage, () => pick(now))
-    await show($)
+    // 0.3.0 pinned the line as a status; a reload onto this version keeps it.
+    $.ui.status(undefined)
     // The countdowns tick even while the session is idle.
-    $.clock.every(60_000, () => void show($))
+    $.clock.every(60_000, () => $.ui.invalidate('ui.render'))
 
     return next(e)
   })
 
   on('session.measure', async ($, e, next) => {
     await update($, usage, () => pick(e))
-    await show($)
 
     return next(e)
+  })
+
+  // The dim labels at the right of the footer under the prompt.
+  on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
+    const u = await read($, usage)
+    const text = u && line(u, await $.clock.now())
+    if (!text) return next(e)
+
+    return next({ ...e, props: { ...e.props, modes: [...e.props.modes, text] } })
   })
 }
